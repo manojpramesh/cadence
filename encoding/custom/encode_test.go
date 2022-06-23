@@ -108,13 +108,33 @@ func TestSemaCodecSmall(t *testing.T) {
 		err := encoder.EncodeLength(length)
 		require.NoError(t, err)
 
-		assert.Equal(t, []byte{0, 0, 0, 10}, buffer.Bytes())
+		assert.Equal(t, []byte{0, 0, 0, 10}, buffer.Bytes(), "encoding error")
 
 		decoder := custom.NewSemaDecoder(nil, buffer)
 		output, err := decoder.DecodeLength()
 		require.NoError(t, err)
 
-		assert.Equal(t, length, output)
+		assert.Equal(t, length, output, "decoding error")
+	})
+
+	t.Run("address", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, buffer := NewTestEncoder()
+
+		addressBytes := []byte{0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00}
+		address := common.MustBytesToAddress(addressBytes)
+
+		err := encoder.EncodeAddress(address)
+		require.NoError(t, err)
+
+		assert.Equal(t, addressBytes, buffer.Bytes(), "encoding error")
+
+		decoder := custom.NewSemaDecoder(nil, buffer)
+		output, err := decoder.DecodeAddress()
+		require.NoError(t, err)
+
+		assert.Equal(t, address, output, "decoding error")
 	})
 
 	t.Run("AddressType", func(t *testing.T) {
