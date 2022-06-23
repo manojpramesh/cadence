@@ -1169,11 +1169,6 @@ func (e *SemaEncoder) EncodeBytes(bytes []byte) (err error) {
 	return e.write(bytes)
 }
 
-// TODO is this useful?
-func (e *SemaEncoder) EncodeCharacter(c rune) (err error) {
-	return e.EncodeInt32(c)
-}
-
 // EncodeLength encodes a non-negative length as a uint32.
 // It uses 4 bytes.
 func (e *SemaEncoder) EncodeLength(length int) (err error) {
