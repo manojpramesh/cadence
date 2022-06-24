@@ -1001,6 +1001,16 @@ func (d *SemaDecoder) DecodeLocation() (location common.Location, err error) {
 	switch prefix {
 	case common.AddressLocationPrefix:
 		return d.DecodeAddressLocation()
+	case common.IdentifierLocationPrefix:
+		return d.DecodeIdentifierLocation()
+	case common.ScriptLocationPrefix:
+		return d.DecodeScriptLocation()
+	case common.StringLocationPrefix:
+		return d.DecodeStringLocation()
+	case common.TransactionLocationPrefix:
+		return d.DecodeTransactionLocation()
+	case string(common.REPLLocationPrefix[0]):
+		location = common.REPLLocation{}
 	case NilLocationPrefix:
 		return
 
@@ -1031,6 +1041,26 @@ func (d *SemaDecoder) DecodeAddressLocation() (location common.AddressLocation, 
 	location = common.NewAddressLocation(d.memoryGauge, address, name)
 
 	return
+}
+
+func (d *SemaDecoder) DecodeIdentifierLocation() (location common.IdentifierLocation, err error) {
+	s, err := d.DecodeString()
+	location = common.IdentifierLocation(s)
+	return
+}
+
+func (d *SemaDecoder) DecodeScriptLocation() (location common.ScriptLocation, err error) {
+	return d.DecodeBytes()
+}
+
+func (d *SemaDecoder) DecodeStringLocation() (location common.StringLocation, err error) {
+	s, err := d.DecodeString()
+	location = common.StringLocation(s)
+	return
+}
+
+func (d *SemaDecoder) DecodeTransactionLocation() (location common.TransactionLocation, err error) {
+	return d.DecodeBytes()
 }
 
 func (d *SemaDecoder) DecodeAddress() (address common.Address, err error) {

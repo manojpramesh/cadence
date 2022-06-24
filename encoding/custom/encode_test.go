@@ -2,6 +2,7 @@ package custom_test
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/onflow/cadence/encoding/custom"
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/cadence/runtime/sema"
@@ -41,7 +42,7 @@ func TestSemaCodecSimpleTypes(t *testing.T) {
 
 	for _, typ := range tests {
 		t.Run(typ.SimpleType.Name, func(t *testing.T) {
-			testEncodeDecode(t, typ.SimpleType,
+			testRootEncodeDecode(t, typ.SimpleType,
 				byte(custom.EncodedSemaSimpleType),
 				byte(typ.SubType),
 			)
@@ -87,7 +88,7 @@ func TestSemaCodecNumericTypes(t *testing.T) {
 	for _, typ := range tests {
 		t.Run(typ.SimpleType.String(), func(t *testing.T) {
 			t.Parallel()
-			testEncodeDecode(t, typ.SimpleType,
+			testRootEncodeDecode(t, typ.SimpleType,
 				byte(custom.EncodedSemaNumericType),
 				byte(typ.SubType),
 			)
@@ -95,51 +96,233 @@ func TestSemaCodecNumericTypes(t *testing.T) {
 	}
 }
 
-func TestSemaCodecSmall(t *testing.T) {
+// TODO more misc types
+func TestSemaCodecMiscTypes(t *testing.T) {
+	t.Run("AddressType", func(t *testing.T) {
+		t.Parallel()
+		testRootEncodeDecode(t, &sema.AddressType{}, byte(custom.EncodedSemaAddressType))
+	})
+}
+
+func TestSemaCodecMiscValues(t *testing.T) {
 	t.Parallel()
 
 	t.Run("length", func(t *testing.T) {
 		t.Parallel()
 
-		encoder, buffer := NewTestEncoder()
+		encoder, decoder, buffer := NewTestCodec()
 
 		length := 10
-
-		err := encoder.EncodeLength(length)
-		require.NoError(t, err)
-
-		assert.Equal(t, []byte{0, 0, 0, 10}, buffer.Bytes(), "encoding error")
-
-		decoder := custom.NewSemaDecoder(nil, buffer)
-		output, err := decoder.DecodeLength()
-		require.NoError(t, err)
-
-		assert.Equal(t, length, output, "decoding error")
+		testEncodeDecode(
+			t,
+			length,
+			buffer,
+			encoder.EncodeLength,
+			decoder.DecodeLength,
+			[]byte{0, 0, 0, byte(length)},
+		)
 	})
 
 	t.Run("address", func(t *testing.T) {
 		t.Parallel()
 
-		encoder, buffer := NewTestEncoder()
+		encoder, decoder, buffer := NewTestCodec()
 
 		addressBytes := []byte{0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00}
 		address := common.MustBytesToAddress(addressBytes)
 
-		err := encoder.EncodeAddress(address)
-		require.NoError(t, err)
-
-		assert.Equal(t, addressBytes, buffer.Bytes(), "encoding error")
-
-		decoder := custom.NewSemaDecoder(nil, buffer)
-		output, err := decoder.DecodeAddress()
-		require.NoError(t, err)
-
-		assert.Equal(t, address, output, "decoding error")
+		testEncodeDecode(
+			t,
+			address,
+			buffer,
+			encoder.EncodeAddress,
+			decoder.DecodeAddress,
+			addressBytes,
+		)
 	})
 
-	t.Run("AddressType", func(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
 		t.Parallel()
-		testEncodeDecode(t, &sema.AddressType{}, byte(custom.EncodedSemaAddressType))
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		s := "some string \x00 foo \t \n\r\n $ 5"
+
+		testEncodeDecode(
+			t,
+			s,
+			buffer,
+			encoder.EncodeString,
+			decoder.DecodeString,
+			append(
+				[]byte{0, 0, 0, byte(len(s))},
+				[]byte(s)...,
+			),
+		)
+	})
+}
+
+func TestSemaCodecLocations(t *testing.T) {
+	t.Parallel()
+
+	for _, prefix := range []string{
+		common.AddressLocationPrefix,
+		common.IdentifierLocationPrefix,
+		common.ScriptLocationPrefix,
+		common.StringLocationPrefix,
+		common.TransactionLocationPrefix,
+		common.REPLLocationPrefix,
+		custom.NilLocationPrefix,
+	} {
+		t.Run(fmt.Sprintf("prefix: %s", prefix), func(t *testing.T) {
+			t.Parallel()
+
+			encoder, decoder, buffer := NewTestCodec()
+
+			testEncodeDecode(
+				t,
+				custom.NilLocationPrefix,
+				buffer,
+				encoder.EncodeLocationPrefix,
+				decoder.DecodeLocationPrefix,
+				[]byte{prefix[0]},
+			)
+		})
+	}
+
+	t.Run("EncodeLocation(nil)", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		testEncodeDecode[common.Location](
+			t,
+			nil,
+			buffer,
+			encoder.EncodeLocation,
+			decoder.DecodeLocation,
+			[]byte{custom.NilLocationPrefix[0]},
+		)
+	})
+
+	t.Run("EncodeLocation(Address)", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		address := common.AddressLocation{
+			Address: common.Address{12, 13, 14},
+			Name:    "foo-bar",
+		}
+		testEncodeDecode[common.Location](
+			t,
+			address,
+			buffer,
+			encoder.EncodeLocation,
+			decoder.DecodeLocation,
+			Concat(
+				[]byte{common.AddressLocationPrefix[0]},
+				address.Address.Bytes(),
+				[]byte{0, 0, 0, byte(len(address.Name))},
+				[]byte(address.Name),
+			),
+		)
+	})
+
+	t.Run("EncodeLocation(Identifier)", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		identifier := common.IdentifierLocation("id \x01 \x00\n\rsomeid\n")
+		testEncodeDecode[common.Location](
+			t,
+			identifier,
+			buffer,
+			encoder.EncodeLocation,
+			decoder.DecodeLocation,
+			Concat(
+				[]byte{common.IdentifierLocationPrefix[0]},
+				[]byte{0, 0, 0, byte(len(identifier))},
+				[]byte(identifier),
+			),
+		)
+	})
+
+	t.Run("EncodeLocation(Script)", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		script := common.ScriptLocation("id \x01 \x00\n\rsomeid\n")
+		testEncodeDecode[common.Location](
+			t,
+			script,
+			buffer,
+			encoder.EncodeLocation,
+			decoder.DecodeLocation,
+			Concat(
+				[]byte{common.ScriptLocationPrefix[0]},
+				[]byte{0, 0, 0, byte(len(script))},
+				script,
+			),
+		)
+	})
+
+	t.Run("EncodeLocation(String)", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		s := common.StringLocation("id \x01 \x00\n\rsomeid\n")
+		testEncodeDecode[common.Location](
+			t,
+			s,
+			buffer,
+			encoder.EncodeLocation,
+			decoder.DecodeLocation,
+			Concat(
+				[]byte{common.StringLocationPrefix[0]},
+				[]byte{0, 0, 0, byte(len(s))},
+				[]byte(s),
+			),
+		)
+	})
+
+	t.Run("EncodeLocation(Transaction)", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		s := common.TransactionLocation("id \x01 \x00\n\rsomeid\n")
+		testEncodeDecode[common.Location](
+			t,
+			s,
+			buffer,
+			encoder.EncodeLocation,
+			decoder.DecodeLocation,
+			Concat(
+				[]byte{common.TransactionLocationPrefix[0]},
+				[]byte{0, 0, 0, byte(len(s))},
+				s,
+			),
+		)
+	})
+
+	t.Run("EncodeLocation(REPL)", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		s := common.REPLLocation{}
+		testEncodeDecode[common.Location](
+			t,
+			s,
+			buffer,
+			encoder.EncodeLocation,
+			decoder.DecodeLocation,
+			[]byte{common.REPLLocationPrefix[0]},
+		)
 	})
 }
 
@@ -237,7 +420,7 @@ func TestSemaCodecCompositeType(t *testing.T) {
 // Helpers
 //
 
-func testEncodeDecode(
+func testRootEncodeDecode(
 	t *testing.T,
 	input sema.Type,
 	expectedEncoding ...byte,
@@ -257,8 +440,51 @@ func testEncodeDecode(
 	return blob, output
 }
 
+func testEncodeDecode[T any](
+	t *testing.T,
+	input T,
+	buffer *bytes.Buffer,
+	encode func(T) error,
+	decode func() (T, error),
+	expectedEncoding []byte,
+) {
+	err := encode(input)
+	require.NoError(t, err)
+
+	if expectedEncoding != nil {
+		assert.Equal(t, expectedEncoding, buffer.Bytes(), "encoding error")
+	}
+
+	output, err := decode()
+	require.NoError(t, err)
+
+	assert.Equal(t, input, output, "decoding error")
+}
+
 func NewTestEncoder() (*custom.SemaEncoder, *bytes.Buffer) {
 	var w bytes.Buffer
 	encoder := custom.NewSemaEncoder(&w)
 	return encoder, &w
+}
+
+func NewTestCodec() (encoder *custom.SemaEncoder, decoder *custom.SemaDecoder, buffer *bytes.Buffer) {
+	var w bytes.Buffer
+	buffer = &w
+	encoder = custom.NewSemaEncoder(buffer)
+	decoder = custom.NewSemaDecoder(nil, buffer)
+	return
+}
+
+func Concat(deep ...[]byte) []byte {
+	length := 0
+	for _, b := range deep {
+		length += len(b)
+	}
+
+	flat := make([]byte, 0, length)
+	for _, b := range deep {
+		flat = append(flat, b...)
+	}
+
+	return flat
 }
