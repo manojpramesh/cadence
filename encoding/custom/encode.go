@@ -466,6 +466,12 @@ func (e *SemaEncoder) EncodeArrayType(t sema.ArrayType) (err error) {
 	}
 }
 
+// TODO encoding of pointers should only encode each type once
+//  idea: Add a new faux type that points to previously encoded types.
+//        Encoder must include map from pointers to offset in encoded bytes.
+//        Decoder then maps from offset to decoded type.
+//  note: this scheme is probably necessary for AST encoding to be correct
+
 func (e *SemaEncoder) EncodeFunctionType(t *sema.FunctionType) (err error) {
 	err = e.EncodeBool(t.IsConstructor)
 	if err != nil {
