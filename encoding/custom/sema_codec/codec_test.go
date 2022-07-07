@@ -96,11 +96,87 @@ func TestSemaCodecNumericTypes(t *testing.T) {
 	}
 }
 
-// TODO more misc types
 func TestSemaCodecMiscTypes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil", func(t *testing.T) {
+		t.Parallel()
+		testRootEncodeDecode(t, nil, byte(sema_codec.EncodedSemaNilType))
+	})
+
 	t.Run("AddressType", func(t *testing.T) {
 		t.Parallel()
 		testRootEncodeDecode(t, &sema.AddressType{}, byte(sema_codec.EncodedSemaAddressType))
+	})
+
+	t.Run("OptionalType", func(t *testing.T) {
+		t.Parallel()
+
+		testRootEncodeDecode(
+			t,
+			&sema.OptionalType{Type: sema.BoolType},
+			byte(sema_codec.EncodedSemaOptionalType),
+			byte(sema_codec.EncodedSemaSimpleType),
+			byte(sema_codec.EncodedSemaSimpleSubTypeBoolType),
+		)
+	})
+
+	t.Run("ReferenceType", func(t *testing.T) {
+		t.Parallel()
+
+		testRootEncodeDecode(
+			t,
+			&sema.ReferenceType{
+				Authorized: false,
+				Type:       sema.AnyType,
+			},
+			byte(sema_codec.EncodedSemaReferenceType),
+			byte(sema_codec.EncodedBoolFalse),
+			byte(sema_codec.EncodedSemaSimpleType),
+			byte(sema_codec.EncodedSemaSimpleSubTypeAnyType),
+		)
+	})
+
+	t.Run("CapabilityType", func(t *testing.T) {
+		t.Parallel()
+
+		testRootEncodeDecode(
+			t,
+			&sema.CapabilityType{BorrowType: sema.VoidType},
+			byte(sema_codec.EncodedSemaCapabilityType),
+			byte(sema_codec.EncodedSemaSimpleType),
+			byte(sema_codec.EncodedSemaSimpleSubTypeVoidType),
+		)
+	})
+}
+
+func TestSemaCodecArrayTypes(t *testing.T) {
+	t.Run("variable", func(t *testing.T) {
+		t.Parallel()
+
+		testRootEncodeDecode(
+			t,
+			&sema.VariableSizedType{Type: sema.CharacterType},
+			byte(sema_codec.EncodedSemaVariableSizedType),
+			byte(sema_codec.EncodedSemaSimpleType),
+			byte(sema_codec.EncodedSemaSimpleSubTypeCharacterType),
+		)
+	})
+
+	t.Run("constant", func(t *testing.T) {
+		t.Parallel()
+
+		testRootEncodeDecode(
+			t,
+			&sema.ConstantSizedType{
+				Type: sema.CharacterType,
+				Size: 90,
+			},
+			byte(sema_codec.EncodedSemaConstantSizedType),
+			byte(sema_codec.EncodedSemaSimpleType),
+			byte(sema_codec.EncodedSemaSimpleSubTypeCharacterType),
+			0, 0, 0, 0, 0, 0, 0, byte(90),
+		)
 	})
 }
 

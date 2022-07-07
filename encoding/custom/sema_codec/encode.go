@@ -92,7 +92,6 @@ func (e *SemaEncoder) Encode(t sema.Type) (err error) {
 // ergo it can't be instantiated on decode.
 func (e *SemaEncoder) EncodeType(t sema.Type) (err error) {
 	if isPointableType(t) {
-		// TODO ensure enough type info is at buffer location
 		if bufferOffset, usePointer := e.typeDefs[t]; usePointer {
 			return e.EncodePointer(bufferOffset)
 		} else {
@@ -264,7 +263,7 @@ func (e *SemaEncoder) EncodeFunctionType(t *sema.FunctionType) (err error) {
 		}
 	}
 
-	// TODO can ArgumentExpressionCheck by omitted?
+	// TODO Is it OK that ArgumentExpressionCheck is omitted?
 
 	return e.EncodeStringMemberOrderedMap(t.Members)
 }
@@ -472,6 +471,7 @@ func (e *SemaEncoder) EncodeTypeTag(tag sema.TypeTag) (err error) {
 	return e.EncodeUInt64(tag.LowerMask())
 }
 
+// TODO add more types into this byte, esp the simple types
 type EncodedSema byte
 
 const (
