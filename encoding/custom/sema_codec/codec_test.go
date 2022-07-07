@@ -160,6 +160,107 @@ func TestSemaCodecMiscValues(t *testing.T) {
 			),
 		)
 	})
+
+	t.Run("bytes", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		b := []byte("some bytes \x00 foo \t \n\r\n $ 5")
+
+		testEncodeDecode(
+			t,
+			b,
+			buffer,
+			encoder.EncodeBytes,
+			decoder.DecodeBytes,
+			append(
+				[]byte{0, 0, 0, byte(len(b))},
+				b...,
+			),
+		)
+	})
+
+	t.Run("bool true", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		testEncodeDecode(
+			t,
+			true,
+			buffer,
+			encoder.EncodeBool,
+			decoder.DecodeBool,
+			[]byte{byte(sema_codec.EncodedBoolTrue)},
+		)
+	})
+
+	t.Run("bool false", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		testEncodeDecode(
+			t,
+			false,
+			buffer,
+			encoder.EncodeBool,
+			decoder.DecodeBool,
+			[]byte{byte(sema_codec.EncodedBoolFalse)},
+		)
+	})
+
+	t.Run("uint64", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		i := uint64(1<<63) + 17
+
+		testEncodeDecode(
+			t,
+			i,
+			buffer,
+			encoder.EncodeUInt64,
+			decoder.DecodeUInt64,
+			[]byte{128, 0, 0, 0, 0, 0, 0, 17},
+		)
+	})
+
+	t.Run("int64 positive", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		i := int64(1<<62) + 17
+
+		testEncodeDecode(
+			t,
+			i,
+			buffer,
+			encoder.EncodeInt64,
+			decoder.DecodeInt64,
+			[]byte{64, 0, 0, 0, 0, 0, 0, 17},
+		)
+	})
+
+	t.Run("int64 negative", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		i := -(int64(1<<62) + 17)
+
+		testEncodeDecode(
+			t,
+			i,
+			buffer,
+			encoder.EncodeInt64,
+			decoder.DecodeInt64,
+			[]byte{0xff - 64, 0xff - 0, 0xff - 0, 0xff - 0, 0xff - 0, 0xff - 0, 0xff - 0, 0xff - 17 + 1},
+		)
+	})
 }
 
 func TestSemaCodecLocations(t *testing.T) {
