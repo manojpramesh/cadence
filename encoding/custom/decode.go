@@ -271,9 +271,21 @@ func (d *Decoder) read(howManyBytes int) (b []byte, err error) {
 // Sema
 //
 
+type LocatedReader struct {
+	r        io.Reader
+	location int
+}
+
+func (l *LocatedReader) Read(p []byte) (n int, err error) {
+	n, err = l.r.Read(p)
+	l.location += n
+	return
+}
+
 // A SemaDecoder decodes custom-encoded representations of Cadence values.
 type SemaDecoder struct {
-	r           io.Reader
+	r           LocatedReader
+	typeDefs    map[int]sema.Type
 	memoryGauge common.MemoryGauge
 }
 
@@ -298,7 +310,8 @@ func DecodeSema(gauge common.MemoryGauge, b []byte) (sema.Type, error) {
 // given io.Reader.
 func NewSemaDecoder(memoryGauge common.MemoryGauge, r io.Reader) *SemaDecoder {
 	return &SemaDecoder{
-		r:           r,
+		r:           LocatedReader{r: r},
+		typeDefs:    map[int]sema.Type{},
 		memoryGauge: memoryGauge,
 	}
 }
@@ -326,50 +339,93 @@ func (d *SemaDecoder) Decode() (t sema.Type, err error) {
 	return d.DecodeType()
 }
 
+func isEncodedPointableType(b EncodedSema) bool {
+	switch b {
+	case EncodedSemaCompositeType,
+		EncodedSemaGenericType,
+		EncodedSemaFunctionType,
+		EncodedSemaDictionaryType,
+		EncodedSemaTransactionType,
+		EncodedSemaRestrictedType,
+		EncodedSemaConstantSizedType:
+		return true
+	default:
+		return false
+	}
+}
+
 func (d *SemaDecoder) DecodeType() (t sema.Type, err error) {
 	typeIdentifier, err := d.DecodeTypeIdentifier()
 	if err != nil {
 		return
 	}
 
+	location := -1
+	if isEncodedPointableType(typeIdentifier) {
+		location = d.r.location - 1 // -1 because pointer points to type identifier
+		//d.typeDefs[d.r.location - 1] = t // -1 because pointer points to type identifier
+	}
+
 	switch typeIdentifier {
 	case EncodedSemaSimpleType:
-		return d.DecodeSimpleType()
-	case EncodedSemaCompositeType:
-		return d.DecodeCompositeType()
+		t, err = d.DecodeSimpleType()
 	case EncodedSemaOptionalType:
-		return d.DecodeOptionalType()
-	case EncodedSemaGenericType:
-		return d.DecodeGenericType()
+		t, err = d.DecodeOptionalType()
+	case EncodedSemaNumericType:
+		t, err = d.DecodeNumericType()
+	case EncodedSemaFixedPointNumericType:
+		t, err = d.DecodeFixedPointNumericType()
+	case EncodedSemaReferenceType:
+		t, err = d.DecodeReferenceType()
+	case EncodedSemaCapabilityType:
+		t, err = d.DecodeCapabilityType()
+	case EncodedSemaVariableSizedType:
+		t, err = d.DecodeVariableSizedType()
 	case EncodedSemaAddressType:
 		t = &sema.AddressType{}
-		return
-	case EncodedSemaNumericType:
-		return d.DecodeNumericType()
-	case EncodedSemaFixedPointNumericType:
-		return d.DecodeFixedPointNumericType()
-	case EncodedSemaVariableSizedType:
-		return d.DecodeVariableSizedType()
-	case EncodedSemaConstantSizedType:
-		return d.DecodeConstantSizedType()
-	case EncodedSemaFunctionType:
-		return d.DecodeFunctionType()
-	case EncodedSemaDictionaryType:
-		return d.DecodeDictionaryType()
-	case EncodedSemaReferenceType:
-		return d.DecodeReferenceType()
-	case EncodedSemaTransactionType:
-		return d.DecodeTransactionType()
-	case EncodedSemaRestrictedType:
-		return d.DecodeRestrictedType()
-	case EncodedSemaCapabilityType:
-		return d.DecodeCapabilityType()
 	case EncodedSemaNilType:
-		return // no type specified
+		t = nil
+
+	case EncodedSemaCompositeType:
+		t, err = d.DecodeCompositeType()
+	case EncodedSemaGenericType:
+		t, err = d.DecodeGenericType()
+	case EncodedSemaFunctionType:
+		t, err = d.DecodeFunctionType()
+	case EncodedSemaDictionaryType:
+		t, err = d.DecodeDictionaryType()
+	case EncodedSemaTransactionType:
+		t, err = d.DecodeTransactionType()
+	case EncodedSemaRestrictedType:
+		t, err = d.DecodeRestrictedType()
+	case EncodedSemaConstantSizedType:
+		t, err = d.DecodeConstantSizedType()
+
+	case EncodedSemaPointerType:
+		t, err = d.DecodePointer()
+
 	default:
 		err = fmt.Errorf("unknown type identifier: %d", typeIdentifier)
 	}
 
+	if location != -1 {
+		d.typeDefs[location] = t
+	}
+
+	return
+}
+
+func (d *SemaDecoder) DecodePointer() (t sema.Type, err error) {
+	bufferOffset, err := d.DecodeLength()
+	if err != nil {
+		return
+	}
+
+	if knownType, defined := d.typeDefs[bufferOffset]; defined {
+		t = knownType
+	} else {
+		err = fmt.Errorf(`pointer to unknown type: %d`, bufferOffset)
+	}
 	return
 }
 
@@ -1125,12 +1181,12 @@ func (d *SemaDecoder) DecodeBool() (boolean bool, err error) {
 }
 
 func (d *SemaDecoder) DecodeUInt64() (u uint64, err error) {
-	err = binary.Read(d.r, binary.BigEndian, &u)
+	err = binary.Read(&d.r, binary.BigEndian, &u)
 	return
 }
 
 func (d *SemaDecoder) DecodeInt64() (i int64, err error) {
-	err = binary.Read(d.r, binary.BigEndian, &i)
+	err = binary.Read(&d.r, binary.BigEndian, &i)
 	return
 }
 

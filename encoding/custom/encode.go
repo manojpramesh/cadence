@@ -277,9 +277,21 @@ const (
 // Sema
 //
 
+type LengthyWriter struct {
+	w      io.Writer
+	length int
+}
+
+func (l *LengthyWriter) Write(p []byte) (n int, err error) {
+	n, err = l.w.Write(p)
+	l.length += n
+	return
+}
+
 // A SemaEncoder converts Sema types into custom-encoded bytes.
 type SemaEncoder struct {
-	w io.Writer
+	w        LengthyWriter
+	typeDefs map[sema.Type]int
 }
 
 // EncodeSema returns the custom-encoded representation of the given sema type.
@@ -299,8 +311,8 @@ func EncodeSema(t sema.Type) ([]byte, error) {
 
 // MustEncodeSema returns the custom-encoded representation of the given sema type, or panics
 // if the sema type cannot be represented in the custom format.
-func MustEncodeSema(value cadence.Value) []byte {
-	b, err := Encode(value)
+func MustEncodeSema(value sema.Type) []byte {
+	b, err := EncodeSema(value)
 	if err != nil {
 		panic(err)
 	}
@@ -310,7 +322,7 @@ func MustEncodeSema(value cadence.Value) []byte {
 // NewSemaEncoder initializes a SemaEncoder that will write custom-encoded bytes to the
 // given io.Writer.
 func NewSemaEncoder(w io.Writer) *SemaEncoder {
-	return &SemaEncoder{w: w}
+	return &SemaEncoder{w: LengthyWriter{w: w}, typeDefs: map[sema.Type]int{}}
 }
 
 // Encode writes the custom-encoded representation of the given sema type to this
@@ -344,6 +356,15 @@ func (e *SemaEncoder) Encode(t sema.Type) (err error) {
 // Includes concrete type identifier because "Type" is an abstract type
 // ergo it can't be instantiated on decode.
 func (e *SemaEncoder) EncodeType(t sema.Type) (err error) {
+	if isPointableType(t) {
+		// TODO ensure enough type info is at buffer location
+		if bufferOffset, usePointer := e.typeDefs[t]; usePointer {
+			return e.EncodePointer(bufferOffset)
+		} else {
+			e.typeDefs[t] = e.w.length
+		}
+	}
+
 	err = e.EncodeTypeIdentifier(t)
 	if err != nil {
 		return
@@ -352,34 +373,54 @@ func (e *SemaEncoder) EncodeType(t sema.Type) (err error) {
 	switch concreteType := t.(type) {
 	case *sema.SimpleType:
 		return e.EncodeSimpleType(concreteType)
-	case *sema.CompositeType:
-		return e.EncodeCompositeType(concreteType)
 	case *sema.OptionalType:
 		return e.EncodeOptionalType(concreteType)
-	case *sema.GenericType:
-		return e.EncodeGenericType(concreteType)
 	case *sema.NumericType:
 		return e.EncodeNumericType(concreteType)
 	case *sema.FixedPointNumericType:
 		return e.EncodeFixedPointNumericType(concreteType)
-	case sema.ArrayType:
-		return e.EncodeArrayType(concreteType)
+	case *sema.ReferenceType:
+		return e.EncodeReferenceType(concreteType)
+	case *sema.CapabilityType:
+		return e.EncodeCapabilityType(concreteType)
+	case *sema.VariableSizedType:
+		return e.EncodeVariableSizedType(concreteType)
+	case *sema.AddressType, nil:
+		return // EncodeTypeIdentifier provided enough info
+
+	case *sema.CompositeType:
+		return e.EncodeCompositeType(concreteType)
+	case *sema.GenericType:
+		return e.EncodeGenericType(concreteType)
 	case *sema.FunctionType:
 		return e.EncodeFunctionType(concreteType)
 	case *sema.DictionaryType:
 		return e.EncodeDictionaryType(concreteType)
-	case *sema.ReferenceType:
-		return e.EncodeReferenceType(concreteType)
 	case *sema.TransactionType:
 		return e.EncodeTransactionType(concreteType)
 	case *sema.RestrictedType:
 		return e.EncodeRestrictedType(concreteType)
-	case *sema.CapabilityType:
-		return e.EncodeCapabilityType(concreteType)
-	case *sema.AddressType, nil:
-		return // EncodeTypeIdentifier provided enough info
+	case *sema.ConstantSizedType:
+		return e.EncodeConstantSizedType(concreteType)
+
 	default:
 		return fmt.Errorf("unexpected type: %s", concreteType)
+	}
+}
+
+// TODO determine if more types need to be pointable to reproduce correct object grpah on decode
+func isPointableType(t sema.Type) bool {
+	switch t.(type) {
+	case *sema.CompositeType,
+		*sema.GenericType,
+		*sema.FunctionType,
+		*sema.DictionaryType,
+		*sema.TransactionType,
+		*sema.RestrictedType,
+		*sema.ConstantSizedType:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -454,23 +495,6 @@ func (e *SemaEncoder) EncodeSimpleType(t *sema.SimpleType) (err error) {
 
 	return e.write([]byte{byte(subType)})
 }
-
-func (e *SemaEncoder) EncodeArrayType(t sema.ArrayType) (err error) {
-	switch concreteType := t.(type) {
-	case *sema.VariableSizedType:
-		return e.EncodeVariableSizedType(concreteType)
-	case *sema.ConstantSizedType:
-		return e.EncodeConstantSizedType(concreteType)
-	default:
-		return fmt.Errorf("unexpected array type: %s", concreteType)
-	}
-}
-
-// TODO encoding of pointers should only encode each type once
-//  idea: Add a new faux type that points to previously encoded types.
-//        Encoder must include map from pointers to offset in encoded bytes.
-//        Decoder then maps from offset to decoded type.
-//  note: this scheme is probably necessary for AST encoding to be correct
 
 func (e *SemaEncoder) EncodeFunctionType(t *sema.FunctionType) (err error) {
 	err = e.EncodeBool(t.IsConstructor)
@@ -733,6 +757,7 @@ const (
 	EncodedSemaTransactionType
 	EncodedSemaRestrictedType
 	EncodedSemaCapabilityType
+	EncodedSemaPointerType
 )
 
 func (e *SemaEncoder) EncodeTypeIdentifier(t sema.Type) (err error) {
@@ -781,6 +806,15 @@ func (e *SemaEncoder) EncodeTypeIdentifier(t sema.Type) (err error) {
 	}
 
 	return e.write([]byte{byte(id)})
+}
+
+func (e *SemaEncoder) EncodePointer(bufferOffset int) (err error) {
+	err = e.write([]byte{byte(EncodedSemaPointerType)})
+	if err != nil {
+		return
+	}
+
+	return e.EncodeLength(bufferOffset)
 }
 
 type EncodedSemaBuiltInCompositeType byte
@@ -1059,15 +1093,15 @@ func (e *SemaEncoder) EncodeBool(boolean bool) (err error) {
 
 // TODO use a more efficient encoder than `binary` (they say to in their top source comment)
 func (e *SemaEncoder) EncodeUInt64(i uint64) (err error) {
-	return binary.Write(e.w, binary.BigEndian, i)
+	return binary.Write(&e.w, binary.BigEndian, i)
 }
 
 func (e *SemaEncoder) EncodeInt64(i int64) (err error) {
-	return binary.Write(e.w, binary.BigEndian, i)
+	return binary.Write(&e.w, binary.BigEndian, i)
 }
 
 func (e *SemaEncoder) EncodeInt32(i int32) (err error) {
-	return binary.Write(e.w, binary.BigEndian, i)
+	return binary.Write(&e.w, binary.BigEndian, i)
 }
 
 func (e *SemaEncoder) EncodeLocation(location common.Location) (err error) {
@@ -1185,7 +1219,7 @@ func (e *SemaEncoder) EncodeLength(length int) (err error) {
 	// TODO is type conversion safe here?
 	l := uint32(length)
 
-	return binary.Write(e.w, binary.BigEndian, l)
+	return binary.Write(&e.w, binary.BigEndian, l)
 }
 
 func (e *SemaEncoder) EncodeAddress(address common.Address) (err error) {
