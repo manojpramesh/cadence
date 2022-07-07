@@ -835,10 +835,6 @@ func (e *SemaEncoder) EncodeInt64(i int64) (err error) {
 	return binary.Write(&e.w, binary.BigEndian, i)
 }
 
-func (e *SemaEncoder) EncodeInt32(i int32) (err error) {
-	return binary.Write(&e.w, binary.BigEndian, i)
-}
-
 func (e *SemaEncoder) EncodeLocation(location common.Location) (err error) {
 	switch concreteType := location.(type) {
 	case common.AddressLocation:
@@ -986,4 +982,3 @@ func EncodeArray[T any](e *SemaEncoder, arr []T, encodeFn func(T) error) (err er
 
 	return
 }
-

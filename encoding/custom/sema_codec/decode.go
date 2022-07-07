@@ -963,4 +963,3 @@ func DecodeArray[T any](d *SemaDecoder, decodeFn func() (T, error)) (arr []T, er
 
 	return
 }
-
