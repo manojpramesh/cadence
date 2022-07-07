@@ -103,54 +103,56 @@ func (d *SemaDecoder) DecodeType() (t sema.Type, err error) {
 		return
 	}
 
-	location := -1
+	location := -1 // -1 here indicates "is not a pointable type"
 	if isEncodedPointableType(typeIdentifier) {
 		location = d.r.location - 1 // -1 because pointer points to type identifier
-		//d.typeDefs[d.r.location - 1] = t // -1 because pointer points to type identifier
 	}
 
-	switch typeIdentifier {
-	case EncodedSemaSimpleType:
-		t, err = d.DecodeSimpleType()
-	case EncodedSemaOptionalType:
-		t, err = d.DecodeOptionalType()
-	case EncodedSemaNumericType:
-		t, err = d.DecodeNumericType()
-	case EncodedSemaFixedPointNumericType:
-		t, err = d.DecodeFixedPointNumericType()
-	case EncodedSemaReferenceType:
-		t, err = d.DecodeReferenceType()
-	case EncodedSemaCapabilityType:
-		t, err = d.DecodeCapabilityType()
-	case EncodedSemaVariableSizedType:
-		t, err = d.DecodeVariableSizedType()
-	case EncodedSemaAddressType:
-		t = &sema.AddressType{}
-	case EncodedSemaNilType:
-		t = nil
+	if isSimpleType(typeIdentifier) {
+		t, err = EncodingToSimpleType(typeIdentifier)
+	} else if isNumericType(typeIdentifier) {
+		t, err = EncodingToNumericType(typeIdentifier)
+	} else if isFixedPointNumericType(typeIdentifier) {
+		t, err = EncodingToFixedPointNumericType(typeIdentifier)
+	} else {
+		switch typeIdentifier {
+		case EncodedSemaOptionalType:
+			t, err = d.DecodeOptionalType()
+		case EncodedSemaReferenceType:
+			t, err = d.DecodeReferenceType()
+		case EncodedSemaCapabilityType:
+			t, err = d.DecodeCapabilityType()
+		case EncodedSemaVariableSizedType:
+			t, err = d.DecodeVariableSizedType()
+		case EncodedSemaAddressType:
+			t = &sema.AddressType{}
+		case EncodedSemaNilType:
+			t = nil
 
-	case EncodedSemaCompositeType:
-		t, err = d.DecodeCompositeType()
-	case EncodedSemaGenericType:
-		t, err = d.DecodeGenericType()
-	case EncodedSemaFunctionType:
-		t, err = d.DecodeFunctionType()
-	case EncodedSemaDictionaryType:
-		t, err = d.DecodeDictionaryType()
-	case EncodedSemaTransactionType:
-		t, err = d.DecodeTransactionType()
-	case EncodedSemaRestrictedType:
-		t, err = d.DecodeRestrictedType()
-	case EncodedSemaConstantSizedType:
-		t, err = d.DecodeConstantSizedType()
+		case EncodedSemaCompositeType:
+			t, err = d.DecodeCompositeType()
+		case EncodedSemaGenericType:
+			t, err = d.DecodeGenericType()
+		case EncodedSemaFunctionType:
+			t, err = d.DecodeFunctionType()
+		case EncodedSemaDictionaryType:
+			t, err = d.DecodeDictionaryType()
+		case EncodedSemaTransactionType:
+			t, err = d.DecodeTransactionType()
+		case EncodedSemaRestrictedType:
+			t, err = d.DecodeRestrictedType()
+		case EncodedSemaConstantSizedType:
+			t, err = d.DecodeConstantSizedType()
 
-	case EncodedSemaPointerType:
-		t, err = d.DecodePointer()
+		case EncodedSemaPointerType:
+			t, err = d.DecodePointer()
 
-	default:
-		err = fmt.Errorf("unknown type identifier: %d", typeIdentifier)
+		default:
+			err = fmt.Errorf("unknown type identifier: %d", typeIdentifier)
+		}
 	}
 
+	// TODO delaying until `t` is set probably breaks recursive types
 	if location != -1 {
 		d.typeDefs[location] = t
 	}
@@ -330,81 +332,71 @@ func (d *SemaDecoder) DecodeConstantSizedType() (a *sema.ConstantSizedType, err 
 	return
 }
 
-func (d *SemaDecoder) DecodeNumericType() (t *sema.NumericType, err error) {
-	b, err := d.read(1)
-	if err != nil {
-		return
-	}
-
-	switch EncodedSemaNumericSubType(b[0]) {
-	case EncodedSemaNumericSubTypeNumberType:
+func EncodingToNumericType(b EncodedSema) (t *sema.NumericType, err error) {
+	switch b {
+	case EncodedSemaNumericTypeNumberType:
 		t = sema.NumberType
-	case EncodedSemaNumericSubTypeSignedNumberType:
+	case EncodedSemaNumericTypeSignedNumberType:
 		t = sema.SignedNumberType
-	case EncodedSemaNumericSubTypeIntegerType:
+	case EncodedSemaNumericTypeIntegerType:
 		t = sema.IntegerType
-	case EncodedSemaNumericSubTypeSignedIntegerType:
+	case EncodedSemaNumericTypeSignedIntegerType:
 		t = sema.SignedIntegerType
-	case EncodedSemaNumericSubTypeIntType:
+	case EncodedSemaNumericTypeIntType:
 		t = sema.IntType
-	case EncodedSemaNumericSubTypeInt8Type:
+	case EncodedSemaNumericTypeInt8Type:
 		t = sema.Int8Type
-	case EncodedSemaNumericSubTypeInt16Type:
+	case EncodedSemaNumericTypeInt16Type:
 		t = sema.Int16Type
-	case EncodedSemaNumericSubTypeInt32Type:
+	case EncodedSemaNumericTypeInt32Type:
 		t = sema.Int32Type
-	case EncodedSemaNumericSubTypeInt64Type:
+	case EncodedSemaNumericTypeInt64Type:
 		t = sema.Int64Type
-	case EncodedSemaNumericSubTypeInt128Type:
+	case EncodedSemaNumericTypeInt128Type:
 		t = sema.Int128Type
-	case EncodedSemaNumericSubTypeInt256Type:
+	case EncodedSemaNumericTypeInt256Type:
 		t = sema.Int256Type
-	case EncodedSemaNumericSubTypeUIntType:
+	case EncodedSemaNumericTypeUIntType:
 		t = sema.UIntType
-	case EncodedSemaNumericSubTypeUInt8Type:
+	case EncodedSemaNumericTypeUInt8Type:
 		t = sema.UInt8Type
-	case EncodedSemaNumericSubTypeUInt16Type:
+	case EncodedSemaNumericTypeUInt16Type:
 		t = sema.UInt16Type
-	case EncodedSemaNumericSubTypeUInt32Type:
+	case EncodedSemaNumericTypeUInt32Type:
 		t = sema.UInt32Type
-	case EncodedSemaNumericSubTypeUInt64Type:
+	case EncodedSemaNumericTypeUInt64Type:
 		t = sema.UInt64Type
-	case EncodedSemaNumericSubTypeUInt128Type:
+	case EncodedSemaNumericTypeUInt128Type:
 		t = sema.UInt128Type
-	case EncodedSemaNumericSubTypeUInt256Type:
+	case EncodedSemaNumericTypeUInt256Type:
 		t = sema.UInt256Type
-	case EncodedSemaNumericSubTypeWord8Type:
+	case EncodedSemaNumericTypeWord8Type:
 		t = sema.Word8Type
-	case EncodedSemaNumericSubTypeWord16Type:
+	case EncodedSemaNumericTypeWord16Type:
 		t = sema.Word16Type
-	case EncodedSemaNumericSubTypeWord32Type:
+	case EncodedSemaNumericTypeWord32Type:
 		t = sema.Word32Type
-	case EncodedSemaNumericSubTypeWord64Type:
+	case EncodedSemaNumericTypeWord64Type:
 		t = sema.Word64Type
-	case EncodedSemaNumericSubTypeFixedPointType:
+	case EncodedSemaNumericTypeFixedPointType:
 		t = sema.FixedPointType
-	case EncodedSemaNumericSubTypeSignedFixedPointType:
+	case EncodedSemaNumericTypeSignedFixedPointType:
 		t = sema.SignedFixedPointType
 	default:
-		err = fmt.Errorf("unknown numeric type: %d", b[0])
+		err = fmt.Errorf("unknown numeric type: %d", b)
 	}
 
 	return
 }
 
-func (d *SemaDecoder) DecodeFixedPointNumericType() (t *sema.FixedPointNumericType, err error) {
-	b, err := d.read(1)
-	if err != nil {
-		return
-	}
-
-	switch EncodedSemaFixedPointNumericSubType(b[0]) {
-	case EncodedSemaFixedPointNumericSubTypeFix64Type:
+func EncodingToFixedPointNumericType(b EncodedSema) (t *sema.FixedPointNumericType, err error) {
+	switch EncodedSema(b) {
+	case EncodedSemaFix64Type:
 		t = sema.Fix64Type
-	case EncodedSemaFixedPointNumericSubTypeUFix64Type:
+	case EncodedSemaUFix64Type:
 		t = sema.UFix64Type
 	default:
-		err = fmt.Errorf("unknown fixed point numeric type: %d", b[0])
+		err = fmt.Errorf("unknown fixed point numeric type: %d", b)
 	}
 
 	return
@@ -439,51 +431,46 @@ func (d *SemaDecoder) DecodeTypeIdentifier() (id EncodedSema, err error) {
 	return
 }
 
-func (d *SemaDecoder) DecodeSimpleType() (t *sema.SimpleType, err error) {
-	b, err := d.read(1)
-	if err != nil {
-		return
-	}
-
-	switch EncodedSemaSimpleSubType(b[0]) {
-	case EncodedSemaSimpleSubTypeAnyType:
+func EncodingToSimpleType(b EncodedSema) (t *sema.SimpleType, err error) {
+	switch b {
+	case EncodedSemaSimpleTypeAnyType:
 		t = sema.AnyType
-	case EncodedSemaSimpleSubTypeAnyResourceType:
+	case EncodedSemaSimpleTypeAnyResourceType:
 		t = sema.AnyResourceType
-	case EncodedSemaSimpleSubTypeAnyStructType:
+	case EncodedSemaSimpleTypeAnyStructType:
 		t = sema.AnyStructType
-	case EncodedSemaSimpleSubTypeBlockType:
+	case EncodedSemaSimpleTypeBlockType:
 		t = sema.BlockType
-	case EncodedSemaSimpleSubTypeBoolType:
+	case EncodedSemaSimpleTypeBoolType:
 		t = sema.BoolType
-	case EncodedSemaSimpleSubTypeCharacterType:
+	case EncodedSemaSimpleTypeCharacterType:
 		t = sema.CharacterType
-	case EncodedSemaSimpleSubTypeDeployedContractType:
+	case EncodedSemaSimpleTypeDeployedContractType:
 		t = sema.DeployedContractType
-	case EncodedSemaSimpleSubTypeInvalidType:
+	case EncodedSemaSimpleTypeInvalidType:
 		t = sema.InvalidType
-	case EncodedSemaSimpleSubTypeMetaType:
+	case EncodedSemaSimpleTypeMetaType:
 		t = sema.MetaType
-	case EncodedSemaSimpleSubTypeNeverType:
+	case EncodedSemaSimpleTypeNeverType:
 		t = sema.NeverType
-	case EncodedSemaSimpleSubTypePathType:
+	case EncodedSemaSimpleTypePathType:
 		t = sema.PathType
-	case EncodedSemaSimpleSubTypeStoragePathType:
+	case EncodedSemaSimpleTypeStoragePathType:
 		t = sema.StoragePathType
-	case EncodedSemaSimpleSubTypeCapabilityPathType:
+	case EncodedSemaSimpleTypeCapabilityPathType:
 		t = sema.CapabilityPathType
-	case EncodedSemaSimpleSubTypePublicPathType:
+	case EncodedSemaSimpleTypePublicPathType:
 		t = sema.PublicPathType
-	case EncodedSemaSimpleSubTypePrivatePathType:
+	case EncodedSemaSimpleTypePrivatePathType:
 		t = sema.PrivatePathType
-	case EncodedSemaSimpleSubTypeStorableType:
+	case EncodedSemaSimpleTypeStorableType:
 		t = sema.StorableType
-	case EncodedSemaSimpleSubTypeStringType:
+	case EncodedSemaSimpleTypeStringType:
 		t = sema.StringType
-	case EncodedSemaSimpleSubTypeVoidType:
+	case EncodedSemaSimpleTypeVoidType:
 		t = sema.VoidType
 	default:
-		err = fmt.Errorf("unknown simple subtype: %d", b[0])
+		err = fmt.Errorf("unknown simple subtype: %d", b)
 	}
 
 	return

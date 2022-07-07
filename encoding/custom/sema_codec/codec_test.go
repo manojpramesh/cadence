@@ -16,35 +16,34 @@ func TestSemaCodecSimpleTypes(t *testing.T) {
 
 	type TestInfo struct {
 		SimpleType *sema.SimpleType
-		SubType    sema_codec.EncodedSemaSimpleSubType
+		Type       sema_codec.EncodedSema
 	}
 
 	tests := []TestInfo{
-		{sema.AnyType, sema_codec.EncodedSemaSimpleSubTypeAnyType},
-		{sema.AnyResourceType, sema_codec.EncodedSemaSimpleSubTypeAnyResourceType},
-		{sema.AnyStructType, sema_codec.EncodedSemaSimpleSubTypeAnyStructType},
-		{sema.BlockType, sema_codec.EncodedSemaSimpleSubTypeBlockType},
-		{sema.BoolType, sema_codec.EncodedSemaSimpleSubTypeBoolType},
-		{sema.CharacterType, sema_codec.EncodedSemaSimpleSubTypeCharacterType},
-		{sema.DeployedContractType, sema_codec.EncodedSemaSimpleSubTypeDeployedContractType},
-		{sema.InvalidType, sema_codec.EncodedSemaSimpleSubTypeInvalidType},
-		{sema.MetaType, sema_codec.EncodedSemaSimpleSubTypeMetaType},
-		{sema.NeverType, sema_codec.EncodedSemaSimpleSubTypeNeverType},
-		{sema.PathType, sema_codec.EncodedSemaSimpleSubTypePathType},
-		{sema.StoragePathType, sema_codec.EncodedSemaSimpleSubTypeStoragePathType},
-		{sema.CapabilityPathType, sema_codec.EncodedSemaSimpleSubTypeCapabilityPathType},
-		{sema.PublicPathType, sema_codec.EncodedSemaSimpleSubTypePublicPathType},
-		{sema.PrivatePathType, sema_codec.EncodedSemaSimpleSubTypePrivatePathType},
-		{sema.StorableType, sema_codec.EncodedSemaSimpleSubTypeStorableType},
-		{sema.StringType, sema_codec.EncodedSemaSimpleSubTypeStringType},
-		{sema.VoidType, sema_codec.EncodedSemaSimpleSubTypeVoidType},
+		{sema.AnyType, sema_codec.EncodedSemaSimpleTypeAnyType},
+		{sema.AnyResourceType, sema_codec.EncodedSemaSimpleTypeAnyResourceType},
+		{sema.AnyStructType, sema_codec.EncodedSemaSimpleTypeAnyStructType},
+		{sema.BlockType, sema_codec.EncodedSemaSimpleTypeBlockType},
+		{sema.BoolType, sema_codec.EncodedSemaSimpleTypeBoolType},
+		{sema.CharacterType, sema_codec.EncodedSemaSimpleTypeCharacterType},
+		{sema.DeployedContractType, sema_codec.EncodedSemaSimpleTypeDeployedContractType},
+		{sema.InvalidType, sema_codec.EncodedSemaSimpleTypeInvalidType},
+		{sema.MetaType, sema_codec.EncodedSemaSimpleTypeMetaType},
+		{sema.NeverType, sema_codec.EncodedSemaSimpleTypeNeverType},
+		{sema.PathType, sema_codec.EncodedSemaSimpleTypePathType},
+		{sema.StoragePathType, sema_codec.EncodedSemaSimpleTypeStoragePathType},
+		{sema.CapabilityPathType, sema_codec.EncodedSemaSimpleTypeCapabilityPathType},
+		{sema.PublicPathType, sema_codec.EncodedSemaSimpleTypePublicPathType},
+		{sema.PrivatePathType, sema_codec.EncodedSemaSimpleTypePrivatePathType},
+		{sema.StorableType, sema_codec.EncodedSemaSimpleTypeStorableType},
+		{sema.StringType, sema_codec.EncodedSemaSimpleTypeStringType},
+		{sema.VoidType, sema_codec.EncodedSemaSimpleTypeVoidType},
 	}
 
 	for _, typ := range tests {
 		t.Run(typ.SimpleType.Name, func(t *testing.T) {
 			testRootEncodeDecode(t, typ.SimpleType,
-				byte(sema_codec.EncodedSemaSimpleType),
-				byte(typ.SubType),
+				byte(typ.Type),
 			)
 		})
 	}
@@ -55,42 +54,41 @@ func TestSemaCodecNumericTypes(t *testing.T) {
 
 	type TestInfo struct {
 		SimpleType sema.Type
-		SubType    sema_codec.EncodedSemaNumericSubType
+		Type       sema_codec.EncodedSema
 	}
 
 	tests := []TestInfo{
-		{sema.NumberType, sema_codec.EncodedSemaNumericSubTypeNumberType},
-		{sema.SignedNumberType, sema_codec.EncodedSemaNumericSubTypeSignedNumberType},
-		{sema.IntegerType, sema_codec.EncodedSemaNumericSubTypeIntegerType},
-		{sema.SignedIntegerType, sema_codec.EncodedSemaNumericSubTypeSignedIntegerType},
-		{sema.IntType, sema_codec.EncodedSemaNumericSubTypeIntType},
-		{sema.Int8Type, sema_codec.EncodedSemaNumericSubTypeInt8Type},
-		{sema.Int16Type, sema_codec.EncodedSemaNumericSubTypeInt16Type},
-		{sema.Int32Type, sema_codec.EncodedSemaNumericSubTypeInt32Type},
-		{sema.Int64Type, sema_codec.EncodedSemaNumericSubTypeInt64Type},
-		{sema.Int128Type, sema_codec.EncodedSemaNumericSubTypeInt128Type},
-		{sema.Int256Type, sema_codec.EncodedSemaNumericSubTypeInt256Type},
-		{sema.UIntType, sema_codec.EncodedSemaNumericSubTypeUIntType},
-		{sema.UInt8Type, sema_codec.EncodedSemaNumericSubTypeUInt8Type},
-		{sema.UInt16Type, sema_codec.EncodedSemaNumericSubTypeUInt16Type},
-		{sema.UInt32Type, sema_codec.EncodedSemaNumericSubTypeUInt32Type},
-		{sema.UInt64Type, sema_codec.EncodedSemaNumericSubTypeUInt64Type},
-		{sema.UInt128Type, sema_codec.EncodedSemaNumericSubTypeUInt128Type},
-		{sema.UInt256Type, sema_codec.EncodedSemaNumericSubTypeUInt256Type},
-		{sema.Word8Type, sema_codec.EncodedSemaNumericSubTypeWord8Type},
-		{sema.Word16Type, sema_codec.EncodedSemaNumericSubTypeWord16Type},
-		{sema.Word32Type, sema_codec.EncodedSemaNumericSubTypeWord32Type},
-		{sema.Word64Type, sema_codec.EncodedSemaNumericSubTypeWord64Type},
-		{sema.FixedPointType, sema_codec.EncodedSemaNumericSubTypeFixedPointType},
-		{sema.SignedFixedPointType, sema_codec.EncodedSemaNumericSubTypeSignedFixedPointType},
+		{sema.NumberType, sema_codec.EncodedSemaNumericTypeNumberType},
+		{sema.SignedNumberType, sema_codec.EncodedSemaNumericTypeSignedNumberType},
+		{sema.IntegerType, sema_codec.EncodedSemaNumericTypeIntegerType},
+		{sema.SignedIntegerType, sema_codec.EncodedSemaNumericTypeSignedIntegerType},
+		{sema.IntType, sema_codec.EncodedSemaNumericTypeIntType},
+		{sema.Int8Type, sema_codec.EncodedSemaNumericTypeInt8Type},
+		{sema.Int16Type, sema_codec.EncodedSemaNumericTypeInt16Type},
+		{sema.Int32Type, sema_codec.EncodedSemaNumericTypeInt32Type},
+		{sema.Int64Type, sema_codec.EncodedSemaNumericTypeInt64Type},
+		{sema.Int128Type, sema_codec.EncodedSemaNumericTypeInt128Type},
+		{sema.Int256Type, sema_codec.EncodedSemaNumericTypeInt256Type},
+		{sema.UIntType, sema_codec.EncodedSemaNumericTypeUIntType},
+		{sema.UInt8Type, sema_codec.EncodedSemaNumericTypeUInt8Type},
+		{sema.UInt16Type, sema_codec.EncodedSemaNumericTypeUInt16Type},
+		{sema.UInt32Type, sema_codec.EncodedSemaNumericTypeUInt32Type},
+		{sema.UInt64Type, sema_codec.EncodedSemaNumericTypeUInt64Type},
+		{sema.UInt128Type, sema_codec.EncodedSemaNumericTypeUInt128Type},
+		{sema.UInt256Type, sema_codec.EncodedSemaNumericTypeUInt256Type},
+		{sema.Word8Type, sema_codec.EncodedSemaNumericTypeWord8Type},
+		{sema.Word16Type, sema_codec.EncodedSemaNumericTypeWord16Type},
+		{sema.Word32Type, sema_codec.EncodedSemaNumericTypeWord32Type},
+		{sema.Word64Type, sema_codec.EncodedSemaNumericTypeWord64Type},
+		{sema.FixedPointType, sema_codec.EncodedSemaNumericTypeFixedPointType},
+		{sema.SignedFixedPointType, sema_codec.EncodedSemaNumericTypeSignedFixedPointType},
 	}
 
 	for _, typ := range tests {
 		t.Run(typ.SimpleType.String(), func(t *testing.T) {
 			t.Parallel()
 			testRootEncodeDecode(t, typ.SimpleType,
-				byte(sema_codec.EncodedSemaNumericType),
-				byte(typ.SubType),
+				byte(typ.Type),
 			)
 		})
 	}
@@ -116,8 +114,7 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 			t,
 			&sema.OptionalType{Type: sema.BoolType},
 			byte(sema_codec.EncodedSemaOptionalType),
-			byte(sema_codec.EncodedSemaSimpleType),
-			byte(sema_codec.EncodedSemaSimpleSubTypeBoolType),
+			byte(sema_codec.EncodedSemaSimpleTypeBoolType),
 		)
 	})
 
@@ -132,8 +129,7 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 			},
 			byte(sema_codec.EncodedSemaReferenceType),
 			byte(sema_codec.EncodedBoolFalse),
-			byte(sema_codec.EncodedSemaSimpleType),
-			byte(sema_codec.EncodedSemaSimpleSubTypeAnyType),
+			byte(sema_codec.EncodedSemaSimpleTypeAnyType),
 		)
 	})
 
@@ -144,8 +140,7 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 			t,
 			&sema.CapabilityType{BorrowType: sema.VoidType},
 			byte(sema_codec.EncodedSemaCapabilityType),
-			byte(sema_codec.EncodedSemaSimpleType),
-			byte(sema_codec.EncodedSemaSimpleSubTypeVoidType),
+			byte(sema_codec.EncodedSemaSimpleTypeVoidType),
 		)
 	})
 }
@@ -158,8 +153,7 @@ func TestSemaCodecArrayTypes(t *testing.T) {
 			t,
 			&sema.VariableSizedType{Type: sema.CharacterType},
 			byte(sema_codec.EncodedSemaVariableSizedType),
-			byte(sema_codec.EncodedSemaSimpleType),
-			byte(sema_codec.EncodedSemaSimpleSubTypeCharacterType),
+			byte(sema_codec.EncodedSemaSimpleTypeCharacterType),
 		)
 	})
 
@@ -173,8 +167,7 @@ func TestSemaCodecArrayTypes(t *testing.T) {
 				Size: 90,
 			},
 			byte(sema_codec.EncodedSemaConstantSizedType),
-			byte(sema_codec.EncodedSemaSimpleType),
-			byte(sema_codec.EncodedSemaSimpleSubTypeCharacterType),
+			byte(sema_codec.EncodedSemaSimpleTypeCharacterType),
 			0, 0, 0, 0, 0, 0, 0, byte(90),
 		)
 	})
