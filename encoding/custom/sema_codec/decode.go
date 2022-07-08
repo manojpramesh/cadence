@@ -152,7 +152,7 @@ func (d *SemaDecoder) DecodeType() (t sema.Type, err error) {
 		}
 	}
 
-	// TODO delaying until `t` is set probably breaks recursive types
+	// TODO delaying until `t` is set breaks recursive types
 	if location != -1 {
 		d.typeDefs[location] = t
 	}

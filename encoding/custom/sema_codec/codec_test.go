@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/onflow/cadence/encoding/custom/sema_codec"
+	"github.com/onflow/cadence/runtime/ast"
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/cadence/runtime/sema"
 	"github.com/stretchr/testify/assert"
@@ -143,6 +144,254 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 			byte(sema_codec.EncodedSemaSimpleTypeVoidType),
 		)
 	})
+
+	t.Run("GenericType", func(t *testing.T) {
+		t.Parallel()
+
+		name := "could be anything"
+
+		testRootEncodeDecode(
+			t,
+			&sema.GenericType{TypeParameter: &sema.TypeParameter{
+				Name:      name,
+				TypeBound: sema.Int32Type,
+				Optional:  true,
+			}},
+			Concat(
+				[]byte{byte(sema_codec.EncodedSemaGenericType)},
+				[]byte{0, 0, 0, byte(len(name))},
+				[]byte(name),
+				[]byte{byte(sema_codec.EncodedSemaNumericTypeInt32Type)},
+				[]byte{byte(sema_codec.EncodedBoolTrue)},
+			)...,
+		)
+	})
+
+	t.Run("FunctionType", func(t *testing.T) {
+		t.Parallel()
+
+		const isConstructor = true
+		typeParameters := []*sema.TypeParameter{
+			{
+				Name:      "myriad",
+				TypeBound: sema.VoidType,
+				Optional:  false,
+			},
+		}
+		parameters := []*sema.Parameter{
+			{
+				Label:          "juno",
+				Identifier:     "fake0",
+				TypeAnnotation: sema.NewTypeAnnotation(sema.AnyResourceType),
+			},
+			{
+				Label:          "calipso",
+				Identifier:     "fake1",
+				TypeAnnotation: sema.NewTypeAnnotation(sema.StringType),
+			},
+		}
+		returnTypeAnnotation := sema.NewTypeAnnotation(sema.PathType)
+		requiredArgumentCount := 1
+		members := sema.NewStringMemberOrderedMap()
+		memberIdentifer := "someID"
+		memberDocString := "\"doctored\" string"
+		members.Set("yolo", sema.NewPublicConstantFieldMember(
+			nil,
+			sema.PrivatePathType,
+			memberIdentifer,
+			sema.Int8Type,
+			memberDocString,
+		))
+
+		functionType := &sema.FunctionType{
+			IsConstructor:            isConstructor,
+			TypeParameters:           typeParameters,
+			Parameters:               parameters,
+			ReturnTypeAnnotation:     returnTypeAnnotation,
+			RequiredArgumentCount:    &requiredArgumentCount,
+			ArgumentExpressionsCheck: nil,
+			Members:                  members,
+		}
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		err := encoder.Encode(functionType)
+		require.NoError(t, err, "encoding error")
+
+		expected := Concat(
+			[]byte{byte(sema_codec.EncodedSemaFunctionType)},
+
+			[]byte{byte(sema_codec.EncodedBoolTrue)}, // isConstructor
+
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // TypeParameters array is non-nil
+			[]byte{0, 0, 0, byte(len(typeParameters))},
+			[]byte{0, 0, 0, byte(len(typeParameters[0].Name))},
+			[]byte(typeParameters[0].Name),
+			[]byte{byte(sema_codec.EncodedSemaSimpleTypeVoidType)},
+			[]byte{byte(sema_codec.EncodedBoolFalse)},
+
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // Parameters array is non-nil
+			[]byte{0, 0, 0, byte(len(parameters))},
+			[]byte{0, 0, 0, byte(len(parameters[0].Label))},
+			[]byte(parameters[0].Label),
+			[]byte{0, 0, 0, byte(len(parameters[0].Identifier))},
+			[]byte(parameters[0].Identifier),
+			[]byte{byte(sema_codec.EncodedBoolTrue)},
+			[]byte{byte(sema_codec.EncodedSemaSimpleTypeAnyResourceType)},
+			[]byte{0, 0, 0, byte(len(parameters[1].Label))},
+			[]byte(parameters[1].Label),
+			[]byte{0, 0, 0, byte(len(parameters[1].Identifier))},
+			[]byte(parameters[1].Identifier),
+			[]byte{byte(sema_codec.EncodedBoolFalse)},
+			[]byte{byte(sema_codec.EncodedSemaSimpleTypeStringType)},
+
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // TypeAnnotation: it is not a Resource
+			[]byte{byte(sema_codec.EncodedSemaSimpleTypePathType)},
+
+			[]byte{0, 0, 0, 0, 0, 0, 0, byte(requiredArgumentCount)},
+
+			[]byte{0, 0, 0, byte(members.Len())},             // Members length
+			[]byte{0, 0, 0, byte(len(members.Newest().Key))}, // Member key
+			[]byte(members.Newest().Key),
+			[]byte{0, 0, 0, 0, 0, 0, 0, byte(ast.AccessPublic)}, // Member value
+			[]byte{0, 0, 0, byte(len(memberIdentifer))},         // Member AST identifier
+			[]byte(memberIdentifer),
+			[]byte{0, 0, 0, 0, 0, 0, 0, 0}, // Member AST identifier position
+			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // Member type annotation
+			[]byte{byte(sema_codec.EncodedSemaNumericTypeInt8Type)},
+			[]byte{0, 0, 0, 0, 0, 0, 0, byte(common.DeclarationKindField)}, // Member declaration kind
+			[]byte{0, 0, 0, 0, 0, 0, 0, byte(ast.VariableKindConstant)},    // member variable kind
+			[]byte{byte(sema_codec.EncodedBoolTrue)},                       // Member has no argument labels
+			[]byte{byte(sema_codec.EncodedBoolFalse)},                      // Member is not predeclared
+			[]byte{0, 0, 0, byte(len(memberDocString))},                    // Member doc string
+			[]byte(memberDocString),
+		)
+
+		assert.Equal(t, expected, buffer.Bytes(), "encoded bytes differ")
+
+		decoded, err := decoder.Decode()
+		require.NoError(t, err, "decoding error")
+
+		// Cannot simply check equality between original and decoded types because they are not shallowly equal.
+		// Specifically, RequiredArgumentCount and Members are not shallowly equal.
+		switch f := decoded.(type) {
+		case *sema.FunctionType:
+			assert.Equal(t, isConstructor, f.IsConstructor)
+
+			require.NotNil(t, f.TypeParameters, "TypeParameters")
+			require.Len(t, f.TypeParameters, 1, "TypeParameters")
+			assert.Equal(t, typeParameters[0], f.TypeParameters[0], "TypeParameters[0]")
+
+			require.NotNil(t, f.Parameters, "Parameters")
+			require.Len(t, f.Parameters, 2, "Parameters")
+			assert.Equal(t, parameters[0], f.Parameters[0], "Parameters[0]")
+			assert.Equal(t, parameters[1], f.Parameters[1], "Parameters[1]")
+
+			assert.Equal(t, returnTypeAnnotation, f.ReturnTypeAnnotation, "ReturnTypeAnnotation")
+
+			assert.Equal(t, requiredArgumentCount, *f.RequiredArgumentCount, "RequiredArgumentCount")
+
+			assert.Nil(t, f.ArgumentExpressionsCheck, "ArgumentExpressionsCheck")
+
+			// verify member equality
+			require.Equal(t, members.Len(), f.Members.Len(), "members length")
+			f.Members.Foreach(func(key string, actual *sema.Member) {
+				expected, present := f.Members.Get(key)
+				require.True(t, present, "extra member: %s", key)
+
+				assert.Equal(t, expected.ContainerType.ID(), actual.ContainerType.ID(), "container type for %s", key)
+				assert.Equal(t, expected.TypeAnnotation.QualifiedString(), actual.TypeAnnotation.QualifiedString(), "type annotation for %s", key)
+			})
+		default:
+			assert.Fail(t, "Decoded type is not *sema.FunctionTypre")
+		}
+	})
+
+	t.Run("DictionaryType", func(t *testing.T) {
+		t.Parallel()
+
+		t.Skip("TODO")
+
+		name := "could be anything"
+
+		testRootEncodeDecode(
+			t,
+			&sema.GenericType{TypeParameter: &sema.TypeParameter{
+				Name:      name,
+				TypeBound: sema.Int32Type,
+				Optional:  true,
+			}},
+			Concat(
+				[]byte{byte(sema_codec.EncodedSemaGenericType)},
+				[]byte{0, 0, 0, byte(len(name))},
+				[]byte(name),
+				[]byte{byte(sema_codec.EncodedSemaNumericTypeInt32Type)},
+				[]byte{byte(sema_codec.EncodedBoolTrue)},
+			)...,
+		)
+	})
+
+	t.Run("TransactionType", func(t *testing.T) {
+		t.Parallel()
+
+		t.Skip("TODO")
+
+		name := "could be anything"
+
+		testRootEncodeDecode(
+			t,
+			&sema.GenericType{TypeParameter: &sema.TypeParameter{
+				Name:      name,
+				TypeBound: sema.Int32Type,
+				Optional:  true,
+			}},
+			Concat(
+				[]byte{byte(sema_codec.EncodedSemaGenericType)},
+				[]byte{0, 0, 0, byte(len(name))},
+				[]byte(name),
+				[]byte{byte(sema_codec.EncodedSemaNumericTypeInt32Type)},
+				[]byte{byte(sema_codec.EncodedBoolTrue)},
+			)...,
+		)
+	})
+
+	t.Run("RestrictedType", func(t *testing.T) {
+		t.Parallel()
+
+		t.Skip("TODO")
+
+		name := "could be anything"
+
+		testRootEncodeDecode(
+			t,
+			&sema.GenericType{TypeParameter: &sema.TypeParameter{
+				Name:      name,
+				TypeBound: sema.Int32Type,
+				Optional:  true,
+			}},
+			Concat(
+				[]byte{byte(sema_codec.EncodedSemaGenericType)},
+				[]byte{0, 0, 0, byte(len(name))},
+				[]byte(name),
+				[]byte{byte(sema_codec.EncodedSemaNumericTypeInt32Type)},
+				[]byte{byte(sema_codec.EncodedBoolTrue)},
+			)...,
+		)
+	})
+}
+
+func TestSemaCodecBadTypes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unknown type", func(t *testing.T) {
+		t.Skip("TODO")
+	})
+
+	t.Run("bad type", func(t *testing.T) {
+		t.Skip("TODO")
+	})
 }
 
 func TestSemaCodecArrayTypes(t *testing.T) {
@@ -227,6 +476,21 @@ func TestSemaCodecMiscValues(t *testing.T) {
 				[]byte{0, 0, 0, byte(len(s))},
 				[]byte(s)...,
 			),
+		)
+	})
+
+	t.Run("string len=0", func(t *testing.T) {
+		t.Parallel()
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		testEncodeDecode(
+			t,
+			"",
+			buffer,
+			encoder.EncodeString,
+			decoder.DecodeString,
+			[]byte{0, 0, 0, 0},
 		)
 	})
 
@@ -584,6 +848,15 @@ func TestSemaCodecCompositeType(t *testing.T) {
 	default:
 		require.Fail(t, "decoded type is not CompositeType")
 	}
+}
+
+func TestSemaCodecRecursiveType(t *testing.T) {
+	t.Parallel()
+
+	t.Skip("TODO")
+
+	// TODO describe a type that contains itself
+	//      this is needed because that's possible but not yet supported by the codec
 }
 
 //

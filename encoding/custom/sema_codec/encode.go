@@ -329,6 +329,8 @@ func (e *SemaEncoder) EncodeFunctionType(t *sema.FunctionType) (err error) {
 	}
 
 	// TODO Is it OK that ArgumentExpressionCheck is omitted?
+	//      I only see it set twice: AddressConversionFunctionType and NumberConversionFunctionType
+	//      It is likely that these should be encoded as enums instead, since they are Cadence globals.
 
 	return e.EncodeStringMemberOrderedMap(t.Members)
 }
