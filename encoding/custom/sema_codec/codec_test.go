@@ -312,23 +312,16 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 	t.Run("DictionaryType", func(t *testing.T) {
 		t.Parallel()
 
-		t.Skip("TODO")
-
-		name := "could be anything"
-
 		testRootEncodeDecode(
 			t,
-			&sema.GenericType{TypeParameter: &sema.TypeParameter{
-				Name:      name,
-				TypeBound: sema.Int32Type,
-				Optional:  true,
-			}},
+			&sema.DictionaryType{
+				KeyType:   sema.StringType,
+				ValueType: sema.AnyStructType,
+			},
 			Concat(
-				[]byte{byte(sema_codec.EncodedSemaGenericType)},
-				[]byte{0, 0, 0, byte(len(name))},
-				[]byte(name),
-				[]byte{byte(sema_codec.EncodedSemaNumericTypeInt32Type)},
-				[]byte{byte(sema_codec.EncodedBoolTrue)},
+				[]byte{byte(sema_codec.EncodedSemaDictionaryType)},
+				[]byte{byte(sema_codec.EncodedSemaSimpleTypeStringType)},
+				[]byte{byte(sema_codec.EncodedSemaSimpleTypeAnyStructType)},
 			)...,
 		)
 	})
@@ -336,25 +329,131 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 	t.Run("TransactionType", func(t *testing.T) {
 		t.Parallel()
 
-		t.Skip("TODO")
+		members := sema.NewStringMemberOrderedMap()
+		memberIdentifer := "someID"
+		memberDocString := "\"doctored\" string"
+		members.Set("yol2", sema.NewPublicConstantFieldMember(
+			nil,
+			sema.PrivatePathType,
+			memberIdentifer,
+			sema.Int8Type,
+			memberDocString,
+		))
 
-		name := "could be anything"
+		fields := []string{
+			"twelve",
+			"twenty four",
+			"forty eight",
+			"ninety six",
+		}
 
-		testRootEncodeDecode(
-			t,
-			&sema.GenericType{TypeParameter: &sema.TypeParameter{
-				Name:      name,
-				TypeBound: sema.Int32Type,
-				Optional:  true,
-			}},
-			Concat(
-				[]byte{byte(sema_codec.EncodedSemaGenericType)},
-				[]byte{0, 0, 0, byte(len(name))},
-				[]byte(name),
-				[]byte{byte(sema_codec.EncodedSemaNumericTypeInt32Type)},
-				[]byte{byte(sema_codec.EncodedBoolTrue)},
-			)...,
+		prepareParameters := []*sema.Parameter{
+			{
+				Label:          "replay",
+				Identifier:     "fake6",
+				TypeAnnotation: sema.NewTypeAnnotation(sema.UInt16Type),
+			},
+		}
+
+		parameters := []*sema.Parameter{
+			{
+				Label:          "hadron",
+				Identifier:     "collision",
+				TypeAnnotation: sema.NewTypeAnnotation(sema.SignedFixedPointType),
+			},
+		}
+
+		transactionType := &sema.TransactionType{
+			Members:           members,
+			Fields:            fields,
+			PrepareParameters: prepareParameters,
+			Parameters:        parameters,
+		}
+
+		encoder, decoder, buffer := NewTestCodec()
+
+		err := encoder.Encode(transactionType)
+		require.NoError(t, err, "encoding error")
+
+		expected := Concat(
+			[]byte{byte(sema_codec.EncodedSemaTransactionType)},
+			// members
+			[]byte{0, 0, 0, byte(members.Len())},             // Members length
+			[]byte{0, 0, 0, byte(len(members.Newest().Key))}, // Member key
+			[]byte(members.Newest().Key),
+			[]byte{0, 0, 0, 0, 0, 0, 0, byte(ast.AccessPublic)}, // Member value
+			[]byte{0, 0, 0, byte(len(memberIdentifer))},         // Member AST identifier
+			[]byte(memberIdentifer),
+			[]byte{0, 0, 0, 0, 0, 0, 0, 0}, // Member AST identifier position
+			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // Member type annotation
+			[]byte{byte(sema_codec.EncodedSemaNumericTypeInt8Type)},
+			[]byte{0, 0, 0, 0, 0, 0, 0, byte(common.DeclarationKindField)}, // Member declaration kind
+			[]byte{0, 0, 0, 0, 0, 0, 0, byte(ast.VariableKindConstant)},    // member variable kind
+			[]byte{byte(sema_codec.EncodedBoolTrue)},                       // Member has no argument labels
+			[]byte{byte(sema_codec.EncodedBoolFalse)},                      // Member is not predeclared
+			[]byte{0, 0, 0, byte(len(memberDocString))},                    // Member doc string
+			[]byte(memberDocString),
+
+			// array of strings for fields
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // array is not nil
+			[]byte{0, 0, 0, byte(len(fields))},
+			[]byte{0, 0, 0, byte(len(fields[0]))},
+			[]byte(fields[0]),
+			[]byte{0, 0, 0, byte(len(fields[1]))},
+			[]byte(fields[1]),
+			[]byte{0, 0, 0, byte(len(fields[2]))},
+			[]byte(fields[2]),
+			[]byte{0, 0, 0, byte(len(fields[3]))},
+			[]byte(fields[3]),
+
+			// array of parameters for prepareParameters
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // array is not nil
+			[]byte{0, 0, 0, byte(len(prepareParameters))},
+			[]byte{0, 0, 0, byte(len(prepareParameters[0].Label))},
+			[]byte(prepareParameters[0].Label),
+			[]byte{0, 0, 0, byte(len(prepareParameters[0].Identifier))},
+			[]byte(prepareParameters[0].Identifier),
+			[]byte{byte(sema_codec.EncodedBoolFalse)},
+			[]byte{byte(sema_codec.EncodedSemaNumericTypeUInt16Type)},
+
+			// array of parameters for parameters
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // array is not nil
+			[]byte{0, 0, 0, byte(len(parameters))},
+			[]byte{0, 0, 0, byte(len(parameters[0].Label))},
+			[]byte(parameters[0].Label),
+			[]byte{0, 0, 0, byte(len(parameters[0].Identifier))},
+			[]byte(parameters[0].Identifier),
+			[]byte{byte(sema_codec.EncodedBoolFalse)},
+			[]byte{byte(sema_codec.EncodedSemaNumericTypeSignedFixedPointType)},
 		)
+
+		assert.Equal(t, expected, buffer.Bytes(), "encoded bytes differ")
+
+		decoded, err := decoder.Decode()
+		require.NoError(t, err, "decoding error")
+
+		// Cannot simply check equality between original and decoded types because they are not shallowly equal.
+		// Specifically, Members is not shallowly equal.
+		switch tx := decoded.(type) {
+		case *sema.TransactionType:
+			// verify member equality
+			require.Equal(t, members.Len(), tx.Members.Len(), "members length")
+			tx.Members.Foreach(func(key string, actual *sema.Member) {
+				expected, present := tx.Members.Get(key)
+				require.True(t, present, "extra member: %s", key)
+
+				assert.Equal(t, expected.ContainerType.ID(), actual.ContainerType.ID(), "container type for %s", key)
+				assert.Equal(t, expected.TypeAnnotation.QualifiedString(), actual.TypeAnnotation.QualifiedString(), "type annotation for %s", key)
+			})
+
+			assert.Equal(t, fields, tx.Fields, "fields")
+			assert.Equal(t, tx.Parameters, parameters, "parameters")
+			assert.Equal(t, tx.PrepareParameters, prepareParameters, "prepareParameters")
+		default:
+			assert.Fail(t, "Decoded type is not *sema.TransactionType")
+		}
 	})
 
 	t.Run("RestrictedType", func(t *testing.T) {
@@ -395,6 +494,7 @@ func TestSemaCodecBadTypes(t *testing.T) {
 }
 
 func TestSemaCodecArrayTypes(t *testing.T) {
+	// TODO also nil arrays
 	t.Run("variable", func(t *testing.T) {
 		t.Parallel()
 
