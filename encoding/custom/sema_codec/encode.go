@@ -952,6 +952,10 @@ func (e *SemaEncoder) EncodeBytes(bytes []byte) (err error) {
 	return e.write(bytes)
 }
 
+// TODO encode length with variable-sized encoding?
+//      e.g. first byte starting with `0` is the last byte in the length
+//      will usually save 3 bytes. the question is if it saves or costs encode and/or decode time
+
 // EncodeLength encodes a non-negative length as a uint32.
 // It uses 4 bytes.
 func (e *SemaEncoder) EncodeLength(length int) (err error) {
@@ -973,6 +977,8 @@ func (e *SemaEncoder) write(b []byte) (err error) {
 	_, err = e.w.Write(b)
 	return
 }
+
+// TODO save a bit in the array length for nil check?
 
 func EncodeArray[T any](e *SemaEncoder, arr []T, encodeFn func(T) error) (err error) {
 	err = e.EncodeBool(arr == nil)
