@@ -131,6 +131,8 @@ func (d *SemaDecoder) DecodeType() (t sema.Type, err error) {
 
 		case EncodedSemaCompositeType:
 			t, err = d.DecodeCompositeType()
+		case EncodedSemaInterfaceType:
+			t, err = d.DecodeInterfaceType()
 		case EncodedSemaGenericType:
 			t, err = d.DecodeGenericType()
 		case EncodedSemaFunctionType:

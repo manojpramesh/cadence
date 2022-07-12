@@ -192,6 +192,7 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 		}
 		returnTypeAnnotation := sema.NewTypeAnnotation(sema.PathType)
 		requiredArgumentCount := 1
+
 		members := sema.NewStringMemberOrderedMap()
 		memberIdentifer := "someID"
 		memberDocString := "\"doctored\" string"
@@ -461,21 +462,14 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 
 		t.Skip("TODO")
 
-		name := "could be anything"
-
 		testRootEncodeDecode(
 			t,
-			&sema.GenericType{TypeParameter: &sema.TypeParameter{
-				Name:      name,
-				TypeBound: sema.Int32Type,
-				Optional:  true,
-			}},
+			&sema.RestrictedType{
+				Type:         sema.IntType,
+				Restrictions: nil,
+			},
 			Concat(
-				[]byte{byte(sema_codec.EncodedSemaGenericType)},
-				[]byte{0, 0, 0, byte(len(name))},
-				[]byte(name),
-				[]byte{byte(sema_codec.EncodedSemaNumericTypeInt32Type)},
-				[]byte{byte(sema_codec.EncodedBoolTrue)},
+				[]byte{byte(sema_codec.EncodedSemaRestrictedType)},
 			)...,
 		)
 	})
@@ -858,6 +852,134 @@ func TestSemaCodecLocations(t *testing.T) {
 			[]byte{common.REPLLocationPrefix[0]},
 		)
 	})
+}
+
+func TestSemaCodecInterfaceType(t *testing.T) {
+	t.Parallel()
+
+	location := common.TransactionLocation{1, 3, 9, 27, 81}
+
+	identifier := "murakami"
+
+	members := sema.NewStringMemberOrderedMap()
+	memberIdentifer := "someID"
+	memberDocString := "\"doctored\" string"
+	members.Set("yolo", sema.NewPublicConstantFieldMember(
+		nil,
+		sema.PrivatePathType,
+		memberIdentifer,
+		sema.Int8Type,
+		memberDocString,
+	))
+
+	fields := []string{"dance"}
+
+	parameters := []*sema.Parameter{
+		{
+			Label:          "lol",
+			Identifier:     "haha",
+			TypeAnnotation: sema.NewTypeAnnotation(sema.NeverType),
+		},
+	}
+
+	interfaceType := &sema.InterfaceType{
+		Location:              location,
+		Identifier:            identifier,
+		CompositeKind:         common.CompositeKindEnum,
+		Members:               members,
+		Fields:                fields,
+		InitializerParameters: parameters,
+	}
+
+	// TODO container type
+	//container := sema.AuthAccountType
+	//interfaceType.SetContainerType(container)
+
+	encoder, decoder, buffer := NewTestCodec()
+
+	err := encoder.Encode(interfaceType)
+	require.NoError(t, err, "encoding error")
+
+	expected := Concat(
+		[]byte{byte(sema_codec.EncodedSemaInterfaceType)},
+
+		[]byte{common.TransactionLocationPrefix[0]},
+		[]byte{0, 0, 0, byte(len(location))},
+		location,
+
+		[]byte{0, 0, 0, byte(len(identifier))},
+		[]byte(identifier),
+
+		[]byte{0, 0, 0, 0, 0, 0, 0, byte(common.CompositeKindEnum)},
+
+		[]byte{0, 0, 0, byte(members.Len())},             // Members length
+		[]byte{0, 0, 0, byte(len(members.Newest().Key))}, // Member key
+		[]byte(members.Newest().Key),
+		[]byte{0, 0, 0, 0, 0, 0, 0, byte(ast.AccessPublic)}, // Member value
+		[]byte{0, 0, 0, byte(len(memberIdentifer))},         // Member AST identifier
+		[]byte(memberIdentifer),
+		[]byte{0, 0, 0, 0, 0, 0, 0, 0}, // Member AST identifier position
+		[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+		[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+		[]byte{byte(sema_codec.EncodedBoolFalse)}, // Member type annotation
+		[]byte{byte(sema_codec.EncodedSemaNumericTypeInt8Type)},
+		[]byte{0, 0, 0, 0, 0, 0, 0, byte(common.DeclarationKindField)}, // Member declaration kind
+		[]byte{0, 0, 0, 0, 0, 0, 0, byte(ast.VariableKindConstant)},    // member variable kind
+		[]byte{byte(sema_codec.EncodedBoolTrue)},                       // Member has no argument labels
+		[]byte{byte(sema_codec.EncodedBoolFalse)},                      // Member is not predeclared
+		[]byte{0, 0, 0, byte(len(memberDocString))},                    // Member doc string
+		[]byte(memberDocString),
+
+		[]byte{byte(sema_codec.EncodedBoolFalse)}, // array is not nil
+		[]byte{0, 0, 0, byte(len(fields))},
+		[]byte{0, 0, 0, byte(len(fields[0]))},
+		[]byte(fields[0]),
+
+		[]byte{byte(sema_codec.EncodedBoolFalse)}, // array is not nil
+		[]byte{0, 0, 0, byte(len(parameters))},
+		[]byte{0, 0, 0, byte(len(parameters[0].Label))},
+		[]byte(parameters[0].Label),
+		[]byte{0, 0, 0, byte(len(parameters[0].Identifier))},
+		[]byte(parameters[0].Identifier),
+		[]byte{byte(sema_codec.EncodedBoolFalse)},
+		[]byte{byte(sema_codec.EncodedSemaSimpleTypeNeverType)},
+
+		[]byte{byte(sema_codec.EncodedSemaNilType)}, // no container type
+	)
+
+	assert.Equal(t, expected, buffer.Bytes(), "encoded bytes differ")
+
+	decoded, err := decoder.Decode()
+	require.NoError(t, err, "decoding error")
+
+	// Cannot simply check equality between original and decoded types because they are not shallowly equal.
+	// Specifically, RequiredArgumentCount and Members are not shallowly equal.
+	switch i := decoded.(type) {
+	case *sema.InterfaceType:
+		assert.Equal(t, location, i.Location, "location")
+
+		assert.Equal(t, identifier, i.Identifier, "identifier")
+
+		assert.Equal(t, common.CompositeKindEnum, i.CompositeKind, "composite kind")
+
+		// verify member equality
+		require.Equal(t, members.Len(), i.Members.Len(), "members length")
+		i.Members.Foreach(func(key string, actual *sema.Member) {
+			expected, present := i.Members.Get(key)
+			require.True(t, present, "extra member: %s", key)
+
+			assert.Equal(t, expected.ContainerType.ID(), actual.ContainerType.ID(), "container type for %s", key)
+			assert.Equal(t, expected.TypeAnnotation.QualifiedString(), actual.TypeAnnotation.QualifiedString(), "type annotation for %s", key)
+		})
+
+		assert.Equal(t, fields, i.Fields, "fields")
+
+		assert.Equal(t, parameters, i.InitializerParameters, "parameters")
+
+		assert.Nil(t, i.GetContainerType(), "container type")
+	default:
+		assert.Fail(t, "Decoded type is not *sema.InterfaceType")
+	}
 }
 
 func TestSemaCodecCompositeType(t *testing.T) {

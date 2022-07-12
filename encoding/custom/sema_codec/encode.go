@@ -118,6 +118,8 @@ func (e *SemaEncoder) EncodeType(t sema.Type) (err error) {
 
 	case *sema.CompositeType:
 		return e.EncodeCompositeType(concreteType)
+	case *sema.InterfaceType:
+		return e.EncodeInterfaceType(concreteType)
 	case *sema.GenericType:
 		return e.EncodeGenericType(concreteType)
 	case *sema.FunctionType:
@@ -198,6 +200,7 @@ const (
 
 	// Pointable Types
 	EncodedSemaCompositeType
+	EncodedSemaInterfaceType
 	EncodedSemaGenericType
 
 	// Other Types
@@ -508,6 +511,8 @@ func (e *SemaEncoder) EncodeTypeIdentifier(t sema.Type) (err error) {
 		return e.EncodeSimpleType(concreteType)
 	case *sema.CompositeType:
 		id = EncodedSemaCompositeType
+	case *sema.InterfaceType:
+		id = EncodedSemaInterfaceType
 	case *sema.OptionalType:
 		id = EncodedSemaOptionalType
 	case *sema.GenericType:
@@ -569,9 +574,10 @@ const (
 // TODO are composite types encodable is CompositeType.IsStorable() is false?
 // TODO if IsImportable is false then do we want to skip for execution state storage?
 func (e *SemaEncoder) EncodeCompositeType(compositeType *sema.CompositeType) (err error) {
-	if compositeType.IsContainerType() {
-		return fmt.Errorf("unexpected container type: %s", compositeType)
-	}
+	// TODO must work with container types too
+	//if compositeType.IsContainerType() {
+	//	return fmt.Errorf("unexpected container type: %s", compositeType)
+	//}
 
 	// Location -> common.Location
 	err = e.EncodeLocation(compositeType.Location)
@@ -783,6 +789,7 @@ func (e *SemaEncoder) EncodeInterfaceType(interfaceType *sema.InterfaceType) (er
 		return
 	}
 
+	// TODO can this be guaranteed to be a single byte? or at least fewer than 8...
 	err = e.EncodeUInt64(uint64(interfaceType.CompositeKind))
 	if err != nil {
 		return
