@@ -103,11 +103,6 @@ func (d *SemaDecoder) DecodeType() (t sema.Type, err error) {
 		return
 	}
 
-	location := -1 // -1 here indicates "is not a pointable type"
-	if isEncodedPointableType(typeIdentifier) {
-		location = d.r.location - 1 // -1 because pointer points to type identifier
-	}
-
 	if isSimpleType(typeIdentifier) {
 		t, err = EncodingToSimpleType(typeIdentifier)
 	} else if isNumericType(typeIdentifier) {
@@ -154,11 +149,6 @@ func (d *SemaDecoder) DecodeType() (t sema.Type, err error) {
 		}
 	}
 
-	// TODO delaying until `t` is set breaks recursive types
-	if location != -1 {
-		d.typeDefs[location] = t
-	}
-
 	return
 }
 
@@ -187,6 +177,10 @@ func (d *SemaDecoder) DecodeCapabilityType() (ct *sema.CapabilityType, err error
 }
 
 func (d *SemaDecoder) DecodeRestrictedType() (rt *sema.RestrictedType, err error) {
+	rt = &sema.RestrictedType{}
+
+	d.typeDefs[d.r.location-1] = rt // -1 because pointer points to type identifier
+
 	t, err := d.DecodeType()
 	if err != nil {
 		return
@@ -197,15 +191,15 @@ func (d *SemaDecoder) DecodeRestrictedType() (rt *sema.RestrictedType, err error
 		return
 	}
 
-	rt = &sema.RestrictedType{
-		Type:         t,
-		Restrictions: restrictions,
-	}
+	rt.Type = t
+	rt.Restrictions = restrictions
 	return
 }
 
 func (d *SemaDecoder) DecodeTransactionType() (tx *sema.TransactionType, err error) {
 	tx = &sema.TransactionType{}
+
+	d.typeDefs[d.r.location-1] = tx // -1 because pointer points to type identifier
 
 	tx.Members, err = d.DecodeStringMemberOrderedMap(tx)
 	if err != nil {
@@ -249,6 +243,10 @@ func (d *SemaDecoder) DecodeReferenceType() (ref *sema.ReferenceType, err error)
 }
 
 func (d *SemaDecoder) DecodeDictionaryType() (dict *sema.DictionaryType, err error) {
+	dict = &sema.DictionaryType{}
+
+	d.typeDefs[d.r.location-1] = dict // -1 because pointer points to type identifier
+
 	keyType, err := d.DecodeType()
 	if err != nil {
 		return
@@ -259,15 +257,15 @@ func (d *SemaDecoder) DecodeDictionaryType() (dict *sema.DictionaryType, err err
 		return
 	}
 
-	dict = &sema.DictionaryType{
-		KeyType:   keyType,
-		ValueType: valueType,
-	}
+	dict.KeyType = keyType
+	dict.ValueType = valueType
 	return
 }
 
 func (d *SemaDecoder) DecodeFunctionType() (ft *sema.FunctionType, err error) {
 	ft = &sema.FunctionType{}
+
+	d.typeDefs[d.r.location-1] = ft // -1 because pointer points to type identifier
 
 	ft.IsConstructor, err = d.DecodeBool()
 	if err != nil {
@@ -317,6 +315,8 @@ func (d *SemaDecoder) DecodeVariableSizedType() (a *sema.VariableSizedType, err 
 }
 
 func (d *SemaDecoder) DecodeConstantSizedType() (a *sema.ConstantSizedType, err error) {
+	a = &sema.ConstantSizedType{}
+
 	t, err := d.DecodeType()
 	if err != nil {
 		return
@@ -327,10 +327,8 @@ func (d *SemaDecoder) DecodeConstantSizedType() (a *sema.ConstantSizedType, err 
 		return
 	}
 
-	a = &sema.ConstantSizedType{
-		Type: t,
-		Size: size,
-	}
+	a.Type = t
+	a.Size = size
 	return
 }
 
@@ -405,12 +403,16 @@ func EncodingToFixedPointNumericType(b EncodedSema) (t *sema.FixedPointNumericTy
 }
 
 func (d *SemaDecoder) DecodeGenericType() (t *sema.GenericType, err error) {
+	t = &sema.GenericType{}
+
+	d.typeDefs[d.r.location-1] = t // -1 because pointer points to type identifier
+
 	tp, err := d.DecodeTypeParameter()
 	if err != nil {
 		return
 	}
 
-	t = &sema.GenericType{TypeParameter: tp}
+	t.TypeParameter = tp
 	return
 }
 
@@ -481,6 +483,8 @@ func EncodingToSimpleType(b EncodedSema) (t *sema.SimpleType, err error) {
 func (d *SemaDecoder) DecodeCompositeType() (t *sema.CompositeType, err error) {
 	t = &sema.CompositeType{}
 
+	d.typeDefs[d.r.location-1] = t // -1 because pointer points to type identifier
+
 	t.Location, err = d.DecodeLocation()
 	if err != nil {
 		return
@@ -550,6 +554,8 @@ func (d *SemaDecoder) DecodeCompositeType() (t *sema.CompositeType, err error) {
 
 func (d *SemaDecoder) DecodeInterfaceType() (t *sema.InterfaceType, err error) {
 	t = &sema.InterfaceType{}
+
+	d.typeDefs[d.r.location-1] = t // -1 because pointer points to type identifier
 
 	t.Location, err = d.DecodeLocation()
 	if err != nil {

@@ -460,18 +460,46 @@ func TestSemaCodecMiscTypes(t *testing.T) {
 	t.Run("RestrictedType", func(t *testing.T) {
 		t.Parallel()
 
-		t.Skip("TODO")
+		restriction := sema.PublicKeyType.InterfaceType()
+		restrictedType := &sema.RestrictedType{
+			Type:         sema.IntType,
+			Restrictions: []*sema.InterfaceType{restriction},
+		}
 
-		testRootEncodeDecode(
-			t,
-			&sema.RestrictedType{
-				Type:         sema.IntType,
-				Restrictions: nil,
-			},
-			Concat(
-				[]byte{byte(sema_codec.EncodedSemaRestrictedType)},
-			)...,
+		encoder, decoder, buffer := NewTestCodec()
+
+		err := encoder.Encode(restrictedType)
+		require.NoError(t, err, "encoding error")
+
+		encodedRestriction := sema_codec.MustEncodeSema(restriction)
+		encodedRestriction = encodedRestriction[1:] // remove leading type identifier
+
+		expected := Concat(
+			[]byte{byte(sema_codec.EncodedSemaRestrictedType)},
+			[]byte{byte(sema_codec.EncodedSemaNumericTypeIntType)},
+			[]byte{byte(sema_codec.EncodedBoolFalse)}, // array is not nil
+			[]byte{0, 0, 0, 1}, // array length
+			encodedRestriction,
 		)
+
+		assert.Equal(t, expected, buffer.Bytes(), "encoded bytes differ")
+
+		decoded, err := decoder.Decode()
+		require.NoError(t, err, "decoding error")
+
+		// Cannot simply check equality between original and decoded types because they are not shallowly equal.
+		// Specifically, the elements of Restrictions are not shallowly equal.
+		switch r := decoded.(type) {
+		case *sema.RestrictedType:
+			assert.Equal(t, sema.IntType, r.Type, "Type")
+
+			require.Len(t, r.Restrictions, 1, "restrictions length")
+
+			// minimal verification
+			assert.Equal(t, sema.PublicKeyType.Identifier, r.Restrictions[0].Identifier, "restriction identifier")
+		default:
+			assert.Fail(t, "Decoded type is not *sema.RestrictionType")
+		}
 	})
 }
 
