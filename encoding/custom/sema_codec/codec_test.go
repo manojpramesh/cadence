@@ -1100,13 +1100,47 @@ func TestSemaCodecCompositeType(t *testing.T) {
 	}
 }
 
+// TODO test each recursive type, not just compositetype
 func TestSemaCodecRecursiveType(t *testing.T) {
 	t.Parallel()
 
-	t.Skip("TODO")
+	c := &sema.CompositeType{}
+	c.SetContainerType(c)
 
-	// TODO describe a type that contains itself
-	//      this is needed because that's possible but not yet supported by the codec
+	encoder, decoder, buffer := NewTestCodec()
+
+	err := encoder.Encode(c)
+	require.NoError(t, err, "encoding error")
+
+	expected := []byte{
+		byte(sema_codec.EncodedSemaCompositeType),
+		sema_codec.NilLocationPrefix[0],
+		0, 0, 0, 0, // identifier length
+		0, 0, 0, 0, 0, 0, 0, 0, // composite kind
+		byte(sema_codec.EncodedBoolTrue), // ExplicitInterfaceConformances array is nil
+		byte(sema_codec.EncodedBoolTrue), // ImplicitTypeRequirementConformances array is nil
+		0, 0, 0, 0,                       // members length
+		byte(sema_codec.EncodedBoolTrue), // Fields array is nil
+		byte(sema_codec.EncodedBoolTrue), // ConstructorParameters array is nil
+		byte(sema_codec.EncodedSemaPointerType),
+		0, 0, 0, 0, // pointer target is beginning of encoding
+		byte(sema_codec.EncodedSemaNilType), // EnumRawType
+		byte(sema_codec.EncodedBoolFalse),   // hasComputedMembers
+		byte(sema_codec.EncodedBoolFalse),   // ImportableWithoutLocation
+	}
+
+	assert.Equal(t, expected, buffer.Bytes(), "encoded bytes differ")
+
+	decoded, err := decoder.Decode()
+	require.NoError(t, err, "decoding error")
+
+	// Cannot simply check equality between original and decoded types because they are not shallowly equal.
+	switch cc := decoded.(type) {
+	case *sema.CompositeType:
+		assert.Equal(t, cc, cc.GetContainerType(), "container is self")
+	default:
+		assert.Fail(t, "Decoded type is not *sema.CompositeType")
+	}
 }
 
 //
